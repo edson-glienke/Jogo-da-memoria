@@ -1,0 +1,492 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Trophy, RotateCcw, Settings, Check, Home, Play } from 'lucide-react';
+
+// ARQUIVO DE CONFIGURAÇÃO - EDITE AQUI PARA CADA CLIENTE
+const CONFIG = {
+  empresa: "Sua Empresa",
+  logo: "🎯", // Pode usar emoji ou URL de imagem
+  corPrimaria: "#3b82f6", // Azul
+  corSecundaria: "#1e40af",
+  tempoLimite: 120, // segundos (0 = sem limite)
+  
+  // VÍDEO DE PROPAGANDA
+  videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+  tempoInatividade: 120, // segundos até entrar no modo screensaver (2 minutos)
+  
+  // IMAGEM RODAPÉ (1080x640px) - aparece durante o jogo
+  imagemRodape: "", // URL da imagem ou deixe vazio para mostrar logo
+  
+  // CARTAS POR NÍVEL DE DIFICULDADE
+  cartasFacil: [ // 4 pares = 8 cartas
+    { id: 1, conteudo: "🚀", tipo: "emoji" },
+    { id: 2, conteudo: "⭐", tipo: "emoji" },
+    { id: 3, conteudo: "🎨", tipo: "emoji" },
+    { id: 4, conteudo: "🎯", tipo: "emoji" }
+  ],
+  
+  cartasIntermediario: [ // 8 pares = 16 cartas
+    { id: 1, conteudo: "🚀", tipo: "emoji" },
+    { id: 2, conteudo: "⭐", tipo: "emoji" },
+    { id: 3, conteudo: "🎨", tipo: "emoji" },
+    { id: 4, conteudo: "🎯", tipo: "emoji" },
+    { id: 5, conteudo: "🏆", tipo: "emoji" },
+    { id: 6, conteudo: "💡", tipo: "emoji" },
+    { id: 7, conteudo: "🎪", tipo: "emoji" },
+    { id: 8, conteudo: "🎭", tipo: "emoji" }
+  ],
+  
+  cartasDificil: [ // 12 pares = 24 cartas
+    { id: 1, conteudo: "🚀", tipo: "emoji" },
+    { id: 2, conteudo: "⭐", tipo: "emoji" },
+    { id: 3, conteudo: "🎨", tipo: "emoji" },
+    { id: 4, conteudo: "🎯", tipo: "emoji" },
+    { id: 5, conteudo: "🏆", tipo: "emoji" },
+    { id: 6, conteudo: "💡", tipo: "emoji" },
+    { id: 7, conteudo: "🎪", tipo: "emoji" },
+    { id: 8, conteudo: "🎭", tipo: "emoji" },
+    { id: 9, conteudo: "🎸", tipo: "emoji" },
+    { id: 10, conteudo: "🎮", tipo: "emoji" },
+    { id: 11, conteudo: "🎲", tipo: "emoji" },
+    { id: 12, conteudo: "🎰", tipo: "emoji" }
+  ]
+};
+
+export default function JogoDaMemoria() {
+  const [cartas, setCartas] = useState([]);
+  const [cartasViradas, setCartasViradas] = useState([]);
+  const [cartasEncontradas, setCartasEncontradas] = useState([]);
+  const [jogadas, setJogadas] = useState(0);
+  const [tempo, setTempo] = useState(0);
+  const [jogoIniciado, setJogoIniciado] = useState(false);
+  const [jogoFinalizado, setJogoFinalizado] = useState(false);
+  const [mostrarConfig, setMostrarConfig] = useState(false);
+  const [modoScreensaver, setModoScreensaver] = useState(false);
+  const [tempoInatividade, setTempoInatividade] = useState(0);
+  const [dificuldade, setDificuldade] = useState(null); // 'facil', 'intermediario', 'dificil'
+  
+  const videoRef = useRef(null);
+  const inactivityTimerRef = useRef(null);
+
+  // Resetar timer de inatividade
+  const resetarInatividade = () => {
+    setTempoInatividade(0);
+    if (inactivityTimerRef.current) {
+      clearInterval(inactivityTimerRef.current);
+    }
+  };
+
+  // Voltar para tela inicial
+  const voltarParaInicio = () => {
+    setJogoIniciado(false);
+    setJogoFinalizado(false);
+    setModoScreensaver(false);
+    setDificuldade(null);
+    setCartas([]);
+    setCartasViradas([]);
+    setCartasEncontradas([]);
+    setJogadas(0);
+    setTempo(0);
+    resetarInatividade();
+  };
+
+  // Monitorar inatividade
+  useEffect(() => {
+    if (!jogoIniciado && !modoScreensaver && !jogoFinalizado) {
+      inactivityTimerRef.current = setInterval(() => {
+        setTempoInatividade(prev => {
+          if (prev >= CONFIG.tempoInatividade) {
+            setModoScreensaver(true);
+            return 0;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (inactivityTimerRef.current) {
+        clearInterval(inactivityTimerRef.current);
+      }
+    };
+  }, [jogoIniciado, modoScreensaver, jogoFinalizado]);
+
+  // Sair do screensaver ao tocar
+  const sairDoScreensaver = () => {
+    setModoScreensaver(false);
+    resetarInatividade();
+  };
+
+  // Inicializar jogo com dificuldade selecionada
+  const inicializarJogo = (nivel) => {
+    let cartasBase;
+    switch(nivel) {
+      case 'facil':
+        cartasBase = CONFIG.cartasFacil;
+        break;
+      case 'intermediario':
+        cartasBase = CONFIG.cartasIntermediario;
+        break;
+      case 'dificil':
+        cartasBase = CONFIG.cartasDificil;
+        break;
+      default:
+        cartasBase = CONFIG.cartasIntermediario;
+    }
+    
+    const cartasDuplicadas = [...cartasBase, ...cartasBase]
+      .map((carta, index) => ({ ...carta, uniqueId: index }))
+      .sort(() => Math.random() - 0.5);
+    
+    setDificuldade(nivel);
+    setCartas(cartasDuplicadas);
+    setCartasViradas([]);
+    setCartasEncontradas([]);
+    setJogadas(0);
+    setTempo(0);
+    setJogoIniciado(true);
+    setJogoFinalizado(false);
+    setModoScreensaver(false);
+    resetarInatividade();
+  };
+
+  // Timer do jogo
+  useEffect(() => {
+    let intervalo;
+    if (jogoIniciado && !jogoFinalizado) {
+      intervalo = setInterval(() => {
+        setTempo(prev => {
+          if (CONFIG.tempoLimite > 0 && prev >= CONFIG.tempoLimite) {
+            setJogoFinalizado(true);
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(intervalo);
+  }, [jogoIniciado, jogoFinalizado]);
+
+  // Verificar vitória
+  useEffect(() => {
+    if (cartasEncontradas.length === cartas.length && cartas.length > 0) {
+      setJogoFinalizado(true);
+      setJogoIniciado(false);
+    }
+  }, [cartasEncontradas, cartas]);
+
+  // Virar carta
+  const virarCarta = (index) => {
+    if (cartasViradas.length === 2 || cartasViradas.includes(index) || 
+        cartasEncontradas.includes(index) || jogoFinalizado) return;
+
+    const novasCartasViradas = [...cartasViradas, index];
+    setCartasViradas(novasCartasViradas);
+
+    if (novasCartasViradas.length === 2) {
+      setJogadas(jogadas + 1);
+      const [primeira, segunda] = novasCartasViradas;
+      
+      if (cartas[primeira].id === cartas[segunda].id) {
+        setCartasEncontradas([...cartasEncontradas, primeira, segunda]);
+        setCartasViradas([]);
+      } else {
+        setTimeout(() => setCartasViradas([]), 1000);
+      }
+    }
+  };
+
+  const formatarTempo = (segundos) => {
+    const mins = Math.floor(segundos / 60);
+    const secs = segundos % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Configurar grid baseado na dificuldade
+  const getGridConfig = () => {
+    switch(dificuldade) {
+      case 'facil':
+        return { cols: 4, rows: 2 }; // 4x2 = 8 cartas
+      case 'intermediario':
+        return { cols: 4, rows: 4 }; // 4x4 = 16 cartas
+      case 'dificil':
+        return { cols: 4, rows: 6 }; // 4x6 = 24 cartas
+      default:
+        return { cols: 4, rows: 4 };
+    }
+  };
+
+  // MODO SCREENSAVER - Vídeo em loop
+  if (modoScreensaver) {
+    return (
+      <div 
+        className="h-screen w-screen bg-black relative cursor-pointer overflow-hidden"
+        onClick={sairDoScreensaver}>
+        <video
+          ref={videoRef}
+          className="w-full h-full object-cover"
+          autoPlay
+          loop
+          muted
+          playsInline>
+          <source src={CONFIG.videoUrl} type="video/mp4" />
+          Seu navegador não suporta vídeo.
+        </video>
+        
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 hover:bg-opacity-10 transition-all">
+          <div className="text-center animate-pulse">
+            <Play size={100} className="text-white mx-auto mb-6" />
+            <p className="text-white text-5xl font-bold">Toque na tela para jogar</p>
+          </div>
+        </div>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            voltarParaInicio();
+          }}
+          className="absolute top-8 right-8 p-6 bg-white bg-opacity-90 rounded-full shadow-lg hover:bg-opacity-100 transition-all z-10">
+          <Home size={40} style={{ color: CONFIG.corPrimaria }} />
+        </button>
+      </div>
+    );
+  }
+
+  // TELA INICIAL - Seleção de Dificuldade
+  if (!jogoIniciado && !jogoFinalizado) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center p-12 overflow-hidden" 
+           style={{ background: `linear-gradient(135deg, ${CONFIG.corPrimaria} 0%, ${CONFIG.corSecundaria} 100%)` }}>
+        <div className="bg-white rounded-3xl shadow-2xl p-16 max-w-4xl w-full text-center relative">
+          <div className="text-9xl mb-8">{CONFIG.logo}</div>
+          <h1 className="text-6xl font-bold mb-6" style={{ color: CONFIG.corPrimaria }}>
+            {CONFIG.empresa}
+          </h1>
+          <h2 className="text-4xl font-semibold mb-12 text-gray-700">Jogo da Memória</h2>
+          
+          <p className="text-2xl text-gray-600 mb-12">
+            Escolha o nível de dificuldade:
+          </p>
+          
+          {/* Botões de Dificuldade */}
+          <div className="space-y-6">
+            <button
+              onClick={() => inicializarJogo('facil')}
+              className="w-full text-3xl px-12 py-8 rounded-2xl text-white font-bold transform hover:scale-105 transition-all shadow-lg bg-green-500 hover:bg-green-600">
+              😊 Fácil - 4 Pares
+            </button>
+            
+            <button
+              onClick={() => inicializarJogo('intermediario')}
+              className="w-full text-3xl px-12 py-8 rounded-2xl text-white font-bold transform hover:scale-105 transition-all shadow-lg bg-yellow-500 hover:bg-yellow-600">
+              🤔 Intermediário - 8 Pares
+            </button>
+            
+            <button
+              onClick={() => inicializarJogo('dificil')}
+              className="w-full text-3xl px-12 py-8 rounded-2xl text-white font-bold transform hover:scale-105 transition-all shadow-lg bg-red-500 hover:bg-red-600">
+              🔥 Difícil - 12 Pares
+            </button>
+          </div>
+
+          {CONFIG.tempoInatividade > 0 && (
+            <div className="mt-8 text-lg text-gray-400">
+              Screensaver em: {formatarTempo(CONFIG.tempoInatividade - tempoInatividade)}
+            </div>
+          )}
+        </div>
+        
+        <button
+          onClick={() => setMostrarConfig(!mostrarConfig)}
+          className="mt-8 p-5 bg-white rounded-full shadow-lg hover:shadow-xl transition-all">
+          <Settings size={40} color={CONFIG.corPrimaria} />
+        </button>
+
+        {mostrarConfig && (
+          <div className="mt-6 bg-white rounded-2xl p-8 max-w-4xl w-full shadow-xl">
+            <h3 className="text-3xl font-bold mb-4">Configurações</h3>
+            <p className="text-gray-600 mb-4 text-lg">Edite o objeto CONFIG no código:</p>
+            <ul className="text-left text-base space-y-2 text-gray-700">
+              <li>• <strong>empresa:</strong> Nome da empresa</li>
+              <li>• <strong>imagemRodape:</strong> URL da imagem 1080x640px para rodapé</li>
+              <li>• <strong>videoUrl:</strong> URL do vídeo MP4 de propaganda</li>
+              <li>• <strong>tempoInatividade:</strong> Segundos até ativar screensaver</li>
+              <li>• <strong>cartasFacil/Intermediario/Dificil:</strong> Arrays com as cartas</li>
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // TELA DE VITÓRIA/DERROTA
+  if (jogoFinalizado) {
+    const venceu = cartasEncontradas.length === cartas.length;
+    return (
+      <div className="h-screen w-screen flex items-center justify-center p-12 overflow-hidden"
+           style={{ background: `linear-gradient(135deg, ${CONFIG.corPrimaria} 0%, ${CONFIG.corSecundaria} 100%)` }}>
+        
+        <button
+          onClick={voltarParaInicio}
+          className="fixed top-8 right-8 p-6 bg-white rounded-full shadow-lg hover:shadow-xl transition-all z-50">
+          <Home size={40} style={{ color: CONFIG.corPrimaria }} />
+        </button>
+
+        <div className="bg-white rounded-3xl shadow-2xl p-16 max-w-3xl w-full text-center">
+          <div className="text-9xl mb-8">{venceu ? "🎉" : "⏰"}</div>
+          <h2 className="text-5xl font-bold mb-6" style={{ color: CONFIG.corPrimaria }}>
+            {venceu ? "Parabéns!" : "Tempo Esgotado!"}
+          </h2>
+          <p className="text-3xl text-gray-700 mb-10">
+            {venceu ? `Você completou o jogo em ${jogadas} jogadas!` : "Tente novamente!"}
+          </p>
+          <div className="flex items-center justify-center gap-6 text-2xl mb-10">
+            <div className="bg-gray-100 px-8 py-4 rounded-xl">
+              <span className="font-semibold">Tempo:</span> {formatarTempo(tempo)}
+            </div>
+            <div className="bg-gray-100 px-8 py-4 rounded-xl">
+              <span className="font-semibold">Jogadas:</span> {jogadas}
+            </div>
+          </div>
+          <button
+            onClick={() => inicializarJogo(dificuldade)}
+            className="text-3xl px-12 py-8 rounded-2xl text-white font-bold transform hover:scale-105 transition-all shadow-lg flex items-center gap-4 mx-auto mb-4"
+            style={{ backgroundColor: CONFIG.corPrimaria }}>
+            <RotateCcw size={36} />
+            Jogar Novamente
+          </button>
+          <button
+            onClick={voltarParaInicio}
+            className="text-2xl px-10 py-6 rounded-2xl bg-gray-500 text-white font-bold transform hover:scale-105 transition-all shadow-lg hover:bg-gray-600">
+            Mudar Dificuldade
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // TELA DO JOGO - Layout Vertical 1080x1920 (2/3 jogo + 1/3 rodapé)
+  const gridConfig = getGridConfig();
+  
+  return (
+    <div className="h-screen w-screen flex flex-col overflow-hidden"
+         style={{ background: `linear-gradient(135deg, ${CONFIG.corPrimaria} 0%, ${CONFIG.corSecundaria} 100%)` }}>
+      
+      {/* ÁREA DO JOGO - 2/3 da tela (1280px em 1920px) */}
+      <div className="flex-1 flex flex-col p-6" style={{ height: '66.67%' }}>
+        
+        {/* Header Compacto */}
+        <div className="bg-white rounded-2xl shadow-lg p-4 mb-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">{CONFIG.logo}</span>
+            <h1 className="text-xl font-bold" style={{ color: CONFIG.corPrimaria }}>
+              {CONFIG.empresa}
+            </h1>
+          </div>
+          <div className="flex gap-4 items-center text-base">
+            <div className="bg-gray-100 px-4 py-2 rounded-xl font-semibold">
+              ⏱️ {formatarTempo(tempo)}
+            </div>
+            <div className="bg-gray-100 px-4 py-2 rounded-xl font-semibold">
+              🎯 {jogadas}
+            </div>
+            <button
+              onClick={() => inicializarJogo(dificuldade)}
+              className="p-2 rounded-xl hover:bg-gray-100 transition-all">
+              <RotateCcw size={24} style={{ color: CONFIG.corPrimaria }} />
+            </button>
+            <button
+              onClick={voltarParaInicio}
+              className="p-2 rounded-xl hover:bg-gray-100 transition-all">
+              <Home size={24} style={{ color: CONFIG.corPrimaria }} />
+            </button>
+          </div>
+        </div>
+
+        {/* Grid de Cartas */}
+        <div className="flex-1 flex items-center justify-center">
+          <div 
+            className="grid gap-3 w-full max-w-4xl mx-auto"
+            style={{ 
+              gridTemplateColumns: `repeat(${gridConfig.cols}, 1fr)`,
+              gridTemplateRows: `repeat(${gridConfig.rows}, 1fr)`
+            }}>
+            {cartas.map((carta, index) => {
+              const virada = cartasViradas.includes(index) || cartasEncontradas.includes(index);
+              const encontrada = cartasEncontradas.includes(index);
+              
+              return (
+                <div
+                  key={index}
+                  onClick={() => virarCarta(index)}
+                  className="aspect-square cursor-pointer perspective-1000">
+                  <div
+                    className={`relative w-full h-full transition-all duration-500 transform-style-3d ${
+                      virada ? 'rotate-y-180' : ''
+                    }`}>
+                    {/* Verso */}
+                    <div
+                      className="absolute w-full h-full rounded-xl shadow-lg flex items-center justify-center backface-hidden"
+                      style={{ backgroundColor: CONFIG.corPrimaria }}>
+                      <div className="text-4xl text-white opacity-30">❓</div>
+                    </div>
+                    
+                    {/* Frente */}
+                    <div
+                      className={`absolute w-full h-full rounded-xl shadow-lg flex items-center justify-center backface-hidden rotate-y-180 ${
+                        encontrada ? 'bg-green-100' : 'bg-white'
+                      }`}>
+                      {carta.tipo === "emoji" ? (
+                        <span className="text-5xl">{carta.conteudo}</span>
+                      ) : (
+                        <img src={carta.conteudo} alt="carta" className="w-3/4 h-3/4 object-contain" />
+                      )}
+                      {encontrada && (
+                        <div className="absolute top-1 right-1">
+                          <Check className="text-green-600" size={24} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* RODAPÉ - 1/3 da tela (640px em 1920px) */}
+      <div className="bg-white shadow-lg flex items-center justify-center" 
+           style={{ height: '33.33%', minHeight: '640px' }}>
+        {CONFIG.imagemRodape ? (
+          <img 
+            src={CONFIG.imagemRodape} 
+            alt="Rodapé" 
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="text-center p-8">
+            <div className="text-9xl mb-4">{CONFIG.logo}</div>
+            <h2 className="text-5xl font-bold" style={{ color: CONFIG.corPrimaria }}>
+              {CONFIG.empresa}
+            </h2>
+          </div>
+        )}
+      </div>
+
+      <style jsx>{`
+        .perspective-1000 {
+          perspective: 1000px;
+        }
+        .transform-style-3d {
+          transform-style: preserve-3d;
+        }
+        .backface-hidden {
+          backface-visibility: hidden;
+        }
+        .rotate-y-180 {
+          transform: rotateY(180deg);
+        }
+      `}</style>
+    </div>
+  );
+}
