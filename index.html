@@ -1,494 +1,847 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Trophy, RotateCcw, Settings, Check, Home, Play } from 'lucide-react';
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo da Memória</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-// ARQUIVO DE CONFIGURAÇÃO - EDITE AQUI PARA CADA CLIENTE
-const CONFIG = {
-  empresa: "Sua Empresa",
-  logo: "🎯", // Pode usar emoji ou URL de imagem
-  corPrimaria: "#3b82f6", // Azul
-  corSecundaria: "#1e40af",
-  tempoLimite: 120, // segundos (0 = sem limite)
-  
-  // VÍDEO DE PROPAGANDA
-  videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-  tempoInatividade: 120, // segundos até entrar no modo screensaver (2 minutos)
-  
-  // IMAGEM RODAPÉ (1080x640px) - aparece durante o jogo
-  imagemRodape: "", // URL da imagem ou deixe vazio para mostrar logo
-  
-  // CARTAS POR NÍVEL DE DIFICULDADE
-  cartasFacil: [ // 4 pares = 8 cartas
-    { id: 1, conteudo: "🚀", tipo: "emoji" },
-    { id: 2, conteudo: "⭐", tipo: "emoji" },
-    { id: 3, conteudo: "🎨", tipo: "emoji" },
-    { id: 4, conteudo: "🎯", tipo: "emoji" }
-  ],
-  
-  cartasIntermediario: [ // 8 pares = 16 cartas
-    { id: 1, conteudo: "🚀", tipo: "emoji" },
-    { id: 2, conteudo: "⭐", tipo: "emoji" },
-    { id: 3, conteudo: "🎨", tipo: "emoji" },
-    { id: 4, conteudo: "🎯", tipo: "emoji" },
-    { id: 5, conteudo: "🏆", tipo: "emoji" },
-    { id: 6, conteudo: "💡", tipo: "emoji" },
-    { id: 7, conteudo: "🎪", tipo: "emoji" },
-    { id: 8, conteudo: "🎭", tipo: "emoji" }
-  ],
-  
-  cartasDificil: [ // 12 pares = 24 cartas
-    { id: 1, conteudo: "🚀", tipo: "emoji" },
-    { id: 2, conteudo: "⭐", tipo: "emoji" },
-    { id: 3, conteudo: "🎨", tipo: "emoji" },
-    { id: 4, conteudo: "🎯", tipo: "emoji" },
-    { id: 5, conteudo: "🏆", tipo: "emoji" },
-    { id: 6, conteudo: "💡", tipo: "emoji" },
-    { id: 7, conteudo: "🎪", tipo: "emoji" },
-    { id: 8, conteudo: "🎭", tipo: "emoji" },
-    { id: 9, conteudo: "🎸", tipo: "emoji" },
-    { id: 10, conteudo: "🎮", tipo: "emoji" },
-    { id: 11, conteudo: "🎲", tipo: "emoji" },
-    { id: 12, conteudo: "🎰", tipo: "emoji" }
-  ]
-};
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            overflow: hidden;
+        }
 
-export default function JogoDaMemoria() {
-  const [cartas, setCartas] = useState([]);
-  const [cartasViradas, setCartasViradas] = useState([]);
-  const [cartasEncontradas, setCartasEncontradas] = useState([]);
-  const [jogadas, setJogadas] = useState(0);
-  const [tempo, setTempo] = useState(0);
-  const [jogoIniciado, setJogoIniciado] = useState(false);
-  const [jogoFinalizado, setJogoFinalizado] = useState(false);
-  const [mostrarConfig, setMostrarConfig] = useState(false);
-  const [modoScreensaver, setModoScreensaver] = useState(false);
-  const [tempoInatividade, setTempoInatividade] = useState(0);
-  const [dificuldade, setDificuldade] = useState(null); // 'facil', 'intermediario', 'dificil'
-  
-  const videoRef = useRef(null);
-  const inactivityTimerRef = useRef(null);
+        .screen {
+            display: none;
+            width: 100vw;
+            height: 100vh;
+        }
 
-  // Resetar timer de inatividade
-  const resetarInatividade = () => {
-    setTempoInatividade(0);
-    if (inactivityTimerRef.current) {
-      clearInterval(inactivityTimerRef.current);
-    }
-  };
+        .screen.active {
+            display: flex;
+        }
 
-  // Voltar para tela inicial
-  const voltarParaInicio = () => {
-    setJogoIniciado(false);
-    setJogoFinalizado(false);
-    setModoScreensaver(false);
-    setDificuldade(null);
-    setCartas([]);
-    setCartasViradas([]);
-    setCartasEncontradas([]);
-    setJogadas(0);
-    setTempo(0);
-    resetarInatividade();
-  };
+        /* ==== CONFIGURAÇÕES - EDITE AQUI ==== */
+        :root {
+            --cor-primaria: #3b82f6;
+            --cor-secundaria: #1e40af;
+            --empresa: "Sua Empresa";
+            --logo: "🎯";
+        }
 
-  // Monitorar inatividade
-  useEffect(() => {
-    if (!jogoIniciado && !modoScreensaver && !jogoFinalizado) {
-      inactivityTimerRef.current = setInterval(() => {
-        setTempoInatividade(prev => {
-          if (prev >= CONFIG.tempoInatividade) {
-            setModoScreensaver(true);
-            return 0;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    }
+        .gradient-bg {
+            background: linear-gradient(135deg, var(--cor-primaria) 0%, var(--cor-secundaria) 100%);
+        }
 
-    return () => {
-      if (inactivityTimerRef.current) {
-        clearInterval(inactivityTimerRef.current);
-      }
-    };
-  }, [jogoIniciado, modoScreensaver, jogoFinalizado]);
+        .btn-primary {
+            background-color: var(--cor-primaria);
+        }
 
-  // Sair do screensaver ao tocar
-  const sairDoScreensaver = () => {
-    setModoScreensaver(false);
-    resetarInatividade();
-  };
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
 
-  // Inicializar jogo com dificuldade selecionada
-  const inicializarJogo = (nivel) => {
-    let cartasBase;
-    switch(nivel) {
-      case 'facil':
-        cartasBase = CONFIG.cartasFacil;
-        break;
-      case 'intermediario':
-        cartasBase = CONFIG.cartasIntermediario;
-        break;
-      case 'dificil':
-        cartasBase = CONFIG.cartasDificil;
-        break;
-      default:
-        cartasBase = CONFIG.cartasIntermediario;
-    }
-    
-    const cartasDuplicadas = [...cartasBase, ...cartasBase]
-      .map((carta, index) => ({ ...carta, uniqueId: index }))
-      .sort(() => Math.random() - 0.5);
-    
-    setDificuldade(nivel);
-    setCartas(cartasDuplicadas);
-    setCartasViradas([]);
-    setCartasEncontradas([]);
-    setJogadas(0);
-    setTempo(0);
-    setJogoIniciado(true);
-    setJogoFinalizado(false);
-    setModoScreensaver(false);
-    resetarInatividade();
-  };
+        /* Screensaver */
+        #screensaver {
+            background: #000;
+            position: relative;
+            cursor: pointer;
+        }
 
-  // Timer do jogo
-  useEffect(() => {
-    let intervalo;
-    if (jogoIniciado && !jogoFinalizado) {
-      intervalo = setInterval(() => {
-        setTempo(prev => {
-          if (CONFIG.tempoLimite > 0 && prev >= CONFIG.tempoLimite) {
-            setJogoFinalizado(true);
-            return prev;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(intervalo);
-  }, [jogoIniciado, jogoFinalizado]);
+        #screensaver video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
 
-  // Verificar vitória
-  useEffect(() => {
-    if (cartasEncontradas.length === cartas.length && cartas.length > 0) {
-      setJogoFinalizado(true);
-      setJogoIniciado(false);
-    }
-  }, [cartasEncontradas, cartas]);
+        .video-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.3);
+            transition: background 0.3s;
+        }
 
-  // Virar carta
-  const virarCarta = (index) => {
-    if (cartasViradas.length === 2 || cartasViradas.includes(index) || 
-        cartasEncontradas.includes(index) || jogoFinalizado) return;
+        .video-overlay:hover {
+            background: rgba(0, 0, 0, 0.1);
+        }
 
-    const novasCartasViradas = [...cartasViradas, index];
-    setCartasViradas(novasCartasViradas);
+        .play-icon {
+            animation: pulse 2s infinite;
+        }
 
-    if (novasCartasViradas.length === 2) {
-      setJogadas(jogadas + 1);
-      const [primeira, segunda] = novasCartasViradas;
-      
-      if (cartas[primeira].id === cartas[segunda].id) {
-        setCartasEncontradas([...cartasEncontradas, primeira, segunda]);
-        setCartasViradas([]);
-      } else {
-        setTimeout(() => setCartasViradas([]), 1000);
-      }
-    }
-  };
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.05); }
+        }
 
-  const formatarTempo = (segundos) => {
-    const mins = Math.floor(segundos / 60);
-    const secs = segundos % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+        /* Tela Inicial */
+        #menu {
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
 
-  // Configurar grid baseado na dificuldade
-  const getGridConfig = () => {
-    switch(dificuldade) {
-      case 'facil':
-        return { cols: 4, rows: 2 }; // 4x2 = 8 cartas
-      case 'intermediario':
-        return { cols: 4, rows: 4 }; // 4x4 = 16 cartas
-      case 'dificil':
-        return { cols: 4, rows: 6 }; // 4x6 = 24 cartas
-      default:
-        return { cols: 4, rows: 4 };
-    }
-  };
+        .menu-card {
+            background: white;
+            border-radius: 1.5rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 3rem;
+            max-width: 50rem;
+            width: 100%;
+            text-align: center;
+        }
 
-  // MODO SCREENSAVER - Vídeo em loop
-  if (modoScreensaver) {
-    return (
-      <div 
-        className="h-screen w-screen bg-black relative cursor-pointer overflow-hidden"
-        onClick={sairDoScreensaver}>
-        <video
-          ref={videoRef}
-          className="w-full h-full object-cover"
-          autoPlay
-          loop
-          muted
-          playsInline>
-          <source src={CONFIG.videoUrl} type="video/mp4" />
-          Seu navegador não suporta vídeo.
+        .logo {
+            font-size: 6rem;
+            margin-bottom: 1rem;
+        }
+
+        .logo-img {
+            max-width: 80%;
+            max-height: 12rem;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            margin: 0 auto 1rem;
+            display: block;
+        }
+
+        .logo-footer {
+            max-width: 90%;
+            max-height: 8rem;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            margin: 0 auto 0.5rem;
+            display: block;
+        }
+
+        .empresa-nome {
+            font-size: 3rem;
+            font-weight: bold;
+            color: var(--cor-primaria);
+            margin-bottom: 1rem;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 1.5rem 2rem;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 0.5rem 0;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+        }
+
+        .btn-facil { background: #22c55e; }
+        .btn-intermediario { background: #eab308; }
+        .btn-dificil { background: #ef4444; }
+
+        .home-btn {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            width: 3.5rem;
+            height: 3.5rem;
+            background: white;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            transition: all 0.3s;
+        }
+
+        .home-btn:hover {
+            transform: scale(1.1);
+        }
+
+        /* Tela de Jogo */
+        #game {
+            flex-direction: column;
+        }
+
+        .game-area {
+            height: 66.67%;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .game-header {
+            background: white;
+            border-radius: 1rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header-right {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .stat-box {
+            background: #f3f4f6;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .icon-btn {
+            width: 2.5rem;
+            height: 2.5rem;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            border-radius: 0.5rem;
+            transition: background 0.3s;
+        }
+
+        .icon-btn:hover {
+            background: #f3f4f6;
+        }
+
+        .grid-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .cards-grid {
+            display: grid;
+            gap: 0.5rem;
+            width: 100%;
+            height: 100%;
+            max-width: 60rem;
+            padding: 1rem;
+        }
+
+        .card {
+            position: relative;
+            cursor: pointer;
+            perspective: 1000px;
+        }
+
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.5s;
+            transform-style: preserve-3d;
+        }
+
+        .card.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .card-back {
+            background-color: var(--cor-primaria);
+        }
+
+        .card-front {
+            background: white;
+            transform: rotateY(180deg);
+        }
+
+        .card-front.matched {
+            background: #dcfce7;
+        }
+
+        .card-content {
+            font-size: 3rem;
+            max-width: 90%;
+            max-height: 90%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card-content img {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+        }
+
+        .footer {
+            height: 33.33%;
+            background: white;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .footer img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .footer-content {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        /* Tela de Vitória */
+        #victory {
+            flex-direction: column;
+        }
+
+        .victory-area {
+            height: 66.67%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .victory-card {
+            background: white;
+            border-radius: 1.5rem;
+            padding: 2rem;
+            max-width: 40rem;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .victory-emoji {
+            font-size: 6rem;
+            margin-bottom: 1rem;
+        }
+
+        .stats-container {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin: 1.5rem 0;
+            flex-wrap: wrap;
+        }
+
+        /* Responsividade */
+        @media (max-width: 768px) {
+            .logo { font-size: 4rem; }
+            .empresa-nome { font-size: 2rem; }
+            .btn { font-size: 1.2rem; padding: 1rem; }
+            .card-content { font-size: 2rem; }
+            .victory-emoji { font-size: 4rem; }
+        }
+
+        @media (max-width: 480px) {
+            .logo { font-size: 3rem; }
+            .empresa-nome { font-size: 1.5rem; }
+            .btn { font-size: 1rem; padding: 0.75rem; }
+            .card-content { font-size: 1.5rem; }
+            .cards-grid { gap: 0.25rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SCREENSAVER -->
+    <div id="screensaver" class="screen">
+        <video id="video" loop muted playsinline>
+            <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
         </video>
-        
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 hover:bg-opacity-10 transition-all">
-          <div className="text-center animate-pulse">
-            <Play size={100} className="text-white mx-auto mb-6" />
-            <p className="text-white text-5xl font-bold">Toque na tela para jogar</p>
-          </div>
-        </div>
-
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            voltarParaInicio();
-          }}
-          className="absolute top-8 right-8 p-6 bg-white bg-opacity-90 rounded-full shadow-lg hover:bg-opacity-100 transition-all z-10">
-          <Home size={40} style={{ color: CONFIG.corPrimaria }} />
-        </button>
-      </div>
-    );
-  }
-
-  // TELA INICIAL - Seleção de Dificuldade
-  if (!jogoIniciado && !jogoFinalizado) {
-    return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 lg:p-12 overflow-hidden" 
-           style={{ background: `linear-gradient(135deg, ${CONFIG.corPrimaria} 0%, ${CONFIG.corSecundaria} 100%)` }}>
-        <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl p-6 sm:p-8 md:p-12 lg:p-16 max-w-4xl w-full text-center relative">
-          <div className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl mb-4 sm:mb-6 md:mb-8">{CONFIG.logo}</div>
-          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 md:mb-6" style={{ color: CONFIG.corPrimaria }}>
-            {CONFIG.empresa}
-          </h1>
-          <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-semibold mb-6 sm:mb-8 md:mb-12 text-gray-700">Jogo da Memória</h2>
-          
-          <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-600 mb-6 sm:mb-8 md:mb-12">
-            Escolha o nível de dificuldade:
-          </p>
-          
-          {/* Botões de Dificuldade Responsivos */}
-          <div className="space-y-3 sm:space-y-4 md:space-y-6">
-            <button
-              onClick={() => inicializarJogo('facil')}
-              className="w-full text-lg sm:text-xl md:text-2xl lg:text-3xl px-6 sm:px-8 md:px-12 py-4 sm:py-6 md:py-8 rounded-xl sm:rounded-2xl text-white font-bold transform hover:scale-105 transition-all shadow-lg bg-green-500 hover:bg-green-600">
-              😊 Fácil - 4 Pares
-            </button>
-            
-            <button
-              onClick={() => inicializarJogo('intermediario')}
-              className="w-full text-lg sm:text-xl md:text-2xl lg:text-3xl px-6 sm:px-8 md:px-12 py-4 sm:py-6 md:py-8 rounded-xl sm:rounded-2xl text-white font-bold transform hover:scale-105 transition-all shadow-lg bg-yellow-500 hover:bg-yellow-600">
-              🤔 Intermediário - 8 Pares
-            </button>
-            
-            <button
-              onClick={() => inicializarJogo('dificil')}
-              className="w-full text-lg sm:text-xl md:text-2xl lg:text-3xl px-6 sm:px-8 md:px-12 py-4 sm:py-6 md:py-8 rounded-xl sm:rounded-2xl text-white font-bold transform hover:scale-105 transition-all shadow-lg bg-red-500 hover:bg-red-600">
-              🔥 Difícil - 12 Pares
-            </button>
-          </div>
-
-          {CONFIG.tempoInatividade > 0 && (
-            <div className="mt-4 sm:mt-6 md:mt-8 text-sm sm:text-base md:text-lg text-gray-400">
-              Screensaver em: {formatarTempo(CONFIG.tempoInatividade - tempoInatividade)}
+        <div class="video-overlay" onclick="exitScreensaver()">
+            <div style="text-align: center; color: white;">
+                <div class="play-icon" style="font-size: 5rem; margin-bottom: 1rem;">▶️</div>
+                <p style="font-size: 2rem; font-weight: bold;">Toque na tela para jogar</p>
             </div>
-          )}
         </div>
-        
-        <button
-          onClick={() => setMostrarConfig(!mostrarConfig)}
-          className="mt-4 sm:mt-6 md:mt-8 p-3 sm:p-4 md:p-5 bg-white rounded-full shadow-lg hover:shadow-xl transition-all">
-          <Settings size={24} className="sm:w-8 sm:h-8 md:w-10 md:h-10" color={CONFIG.corPrimaria} />
-        </button>
-
-        {mostrarConfig && (
-          <div className="mt-4 sm:mt-6 bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-4xl w-full shadow-xl">
-            <h3 className="text-xl sm:text-2xl md:text-3xl font-bold mb-3 sm:mb-4">Configurações</h3>
-            <p className="text-gray-600 mb-3 sm:mb-4 text-sm sm:text-base md:text-lg">Edite o objeto CONFIG no código:</p>
-            <ul className="text-left text-xs sm:text-sm md:text-base space-y-1.5 sm:space-y-2 text-gray-700">
-              <li>• <strong>empresa:</strong> Nome da empresa</li>
-              <li>• <strong>imagemRodape:</strong> URL da imagem para rodapé</li>
-              <li>• <strong>videoUrl:</strong> URL do vídeo MP4 de propaganda</li>
-              <li>• <strong>tempoInatividade:</strong> Segundos até ativar screensaver</li>
-              <li>• <strong>cartasFacil/Intermediario/Dificil:</strong> Arrays com as cartas</li>
-            </ul>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // TELA DE VITÓRIA/DERROTA
-  if (jogoFinalizado) {
-    const venceu = cartasEncontradas.length === cartas.length;
-    return (
-      <div className="h-screen w-screen flex items-center justify-center p-12 overflow-hidden"
-           style={{ background: `linear-gradient(135deg, ${CONFIG.corPrimaria} 0%, ${CONFIG.corSecundaria} 100%)` }}>
-        
-        <button
-          onClick={voltarParaInicio}
-          className="fixed top-8 right-8 p-6 bg-white rounded-full shadow-lg hover:shadow-xl transition-all z-50">
-          <Home size={40} style={{ color: CONFIG.corPrimaria }} />
-        </button>
-
-        <div className="bg-white rounded-3xl shadow-2xl p-16 max-w-3xl w-full text-center">
-          <div className="text-9xl mb-8">{venceu ? "🎉" : "⏰"}</div>
-          <h2 className="text-5xl font-bold mb-6" style={{ color: CONFIG.corPrimaria }}>
-            {venceu ? "Parabéns!" : "Tempo Esgotado!"}
-          </h2>
-          <p className="text-3xl text-gray-700 mb-10">
-            {venceu ? `Você completou o jogo em ${jogadas} jogadas!` : "Tente novamente!"}
-          </p>
-          <div className="flex items-center justify-center gap-6 text-2xl mb-10">
-            <div className="bg-gray-100 px-8 py-4 rounded-xl">
-              <span className="font-semibold">Tempo:</span> {formatarTempo(tempo)}
-            </div>
-            <div className="bg-gray-100 px-8 py-4 rounded-xl">
-              <span className="font-semibold">Jogadas:</span> {jogadas}
-            </div>
-          </div>
-          <button
-            onClick={() => inicializarJogo(dificuldade)}
-            className="text-3xl px-12 py-8 rounded-2xl text-white font-bold transform hover:scale-105 transition-all shadow-lg flex items-center gap-4 mx-auto mb-4"
-            style={{ backgroundColor: CONFIG.corPrimaria }}>
-            <RotateCcw size={36} />
-            Jogar Novamente
-          </button>
-          <button
-            onClick={voltarParaInicio}
-            className="text-2xl px-10 py-6 rounded-2xl bg-gray-500 text-white font-bold transform hover:scale-105 transition-all shadow-lg hover:bg-gray-600">
-            Mudar Dificuldade
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // TELA DO JOGO - Layout Responsivo (2/3 jogo + 1/3 rodapé)
-  const gridConfig = getGridConfig();
-  
-  return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden"
-         style={{ background: `linear-gradient(135deg, ${CONFIG.corPrimaria} 0%, ${CONFIG.corSecundaria} 100%)` }}>
-      
-      {/* ÁREA DO JOGO - 2/3 da tela */}
-      <div className="flex flex-col p-3 sm:p-4 md:p-6" style={{ height: '66.67%' }}>
-        
-        {/* Header Compacto e Responsivo */}
-        <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-2 sm:p-3 md:p-4 mb-2 sm:mb-3 md:mb-4 flex flex-wrap justify-between items-center gap-2">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <span className="text-2xl sm:text-3xl md:text-4xl">{CONFIG.logo}</span>
-            <h1 className="text-sm sm:text-base md:text-xl lg:text-2xl font-bold truncate" style={{ color: CONFIG.corPrimaria }}>
-              {CONFIG.empresa}
-            </h1>
-          </div>
-          <div className="flex gap-2 sm:gap-3 md:gap-4 items-center text-xs sm:text-sm md:text-base">
-            <div className="bg-gray-100 px-2 sm:px-3 md:px-4 py-1 sm:py-2 rounded-lg md:rounded-xl font-semibold whitespace-nowrap">
-              ⏱️ {formatarTempo(tempo)}
-            </div>
-            <div className="bg-gray-100 px-2 sm:px-3 md:px-4 py-1 sm:py-2 rounded-lg md:rounded-xl font-semibold whitespace-nowrap">
-              🎯 {jogadas}
-            </div>
-            <button
-              onClick={() => inicializarJogo(dificuldade)}
-              className="p-1.5 sm:p-2 rounded-lg md:rounded-xl hover:bg-gray-100 transition-all">
-              <RotateCcw size={16} className="sm:w-5 sm:h-5 md:w-6 md:h-6" style={{ color: CONFIG.corPrimaria }} />
-            </button>
-            <button
-              onClick={voltarParaInicio}
-              className="p-1.5 sm:p-2 rounded-lg md:rounded-xl hover:bg-gray-100 transition-all">
-              <Home size={16} className="sm:w-5 sm:h-5 md:w-6 md:h-6" style={{ color: CONFIG.corPrimaria }} />
-            </button>
-          </div>
-        </div>
-
-        {/* Grid de Cartas Responsivo */}
-        <div className="flex-1 flex items-center justify-center overflow-hidden">
-          <div 
-            className="grid gap-1.5 sm:gap-2 md:gap-3 lg:gap-4 w-full h-full p-2"
-            style={{ 
-              gridTemplateColumns: `repeat(${gridConfig.cols}, 1fr)`,
-              gridTemplateRows: `repeat(${gridConfig.rows}, 1fr)`,
-              maxHeight: '100%',
-              maxWidth: '100%'
-            }}>
-            {cartas.map((carta, index) => {
-              const virada = cartasViradas.includes(index) || cartasEncontradas.includes(index);
-              const encontrada = cartasEncontradas.includes(index);
-              
-              return (
-                <div
-                  key={index}
-                  onClick={() => virarCarta(index)}
-                  className="cursor-pointer perspective-1000 w-full h-full">
-                  <div
-                    className={`relative w-full h-full transition-all duration-500 transform-style-3d ${
-                      virada ? 'rotate-y-180' : ''
-                    }`}>
-                    {/* Verso */}
-                    <div
-                      className="absolute w-full h-full rounded-lg sm:rounded-xl md:rounded-2xl shadow-lg flex items-center justify-center backface-hidden"
-                      style={{ backgroundColor: CONFIG.corPrimaria }}>
-                      <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl text-white opacity-30">❓</div>
-                    </div>
-                    
-                    {/* Frente */}
-                    <div
-                      className={`absolute w-full h-full rounded-lg sm:rounded-xl md:rounded-2xl shadow-lg flex items-center justify-center backface-hidden rotate-y-180 ${
-                        encontrada ? 'bg-green-100' : 'bg-white'
-                      }`}>
-                      {carta.tipo === "emoji" ? (
-                        <span className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl">{carta.conteudo}</span>
-                      ) : (
-                        <img src={carta.conteudo} alt="carta" className="w-3/4 h-3/4 object-contain" />
-                      )}
-                      {encontrada && (
-                        <div className="absolute top-1 right-1">
-                          <Check className="text-green-600 w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* RODAPÉ - 1/3 da tela */}
-      <div className="bg-white shadow-lg flex items-center justify-center overflow-hidden" 
-           style={{ height: '33.33%' }}>
-        {CONFIG.imagemRodape ? (
-          <img 
-            src={CONFIG.imagemRodape} 
-            alt="Rodapé" 
-            className="w-full h-full object-contain"
-          />
-        ) : (
-          <div className="text-center p-4 sm:p-6 md:p-8">
-            <div className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl mb-2 sm:mb-3 md:mb-4">{CONFIG.logo}</div>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold" style={{ color: CONFIG.corPrimaria }}>
-              {CONFIG.empresa}
-            </h2>
-          </div>
-        )}
-      </div>
-
-      <style jsx>{`
-        .perspective-1000 {
-          perspective: 1000px;
-        }
-        .transform-style-3d {
-          transform-style: preserve-3d;
-        }
-        .backface-hidden {
-          backface-visibility: hidden;
-        }
-        .rotate-y-180 {
-          transform: rotateY(180deg);
-        }
-      `}</style>
+        <button class="home-btn" onclick="goHome(event)">🏠</button>
     </div>
-  );
-}
+
+    <!-- MENU INICIAL -->
+    <div id="menu" class="screen active gradient-bg">
+        <div class="menu-card">
+            <div id="menuLogo"></div>
+            <h1 class="empresa-nome" id="menuEmpresaNome">Sua Empresa</h1>
+            <h2 style="font-size: 2rem; margin-bottom: 2rem; color: #666;">Jogo da Memória</h2>
+            <p style="font-size: 1.2rem; color: #666; margin-bottom: 2rem;">Escolha o nível de dificuldade:</p>
+            
+            <button class="btn btn-facil" onclick="startGame('facil')">😊 Fácil - 4 Pares</button>
+            <button class="btn btn-intermediario" onclick="startGame('intermediario')">🤔 Intermediário - 8 Pares</button>
+            <button class="btn btn-dificil" onclick="startGame('dificil')">🔥 Difícil - 12 Pares</button>
+            
+            <div id="inactivityTimer" style="margin-top: 1.5rem; color: #999;"></div>
+        </div>
+    </div>
+
+    <!-- TELA DE JOGO -->
+    <div id="game" class="screen gradient-bg">
+        <div class="game-area">
+            <div class="game-header">
+                <div class="header-left">
+                    <span id="headerLogo"></span>
+                    <h2 style="font-weight: bold; color: var(--cor-primaria);" id="headerEmpresaNome">Sua Empresa</h2>
+                </div>
+                <div class="header-right">
+                    <div class="stat-box" id="timeDisplay">⏱️ 00:00</div>
+                    <div class="stat-box" id="movesDisplay">🎯 0</div>
+                    <button class="icon-btn" onclick="restartGame()" title="Reiniciar">🔄</button>
+                    <button class="icon-btn" onclick="goHome()" title="Menu">🏠</button>
+                </div>
+            </div>
+            
+            <div class="grid-container">
+                <div id="cardsGrid" class="cards-grid"></div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <!-- Se quiser imagem customizada, adicione no CONFIG: imagemRodape -->
+            <div class="footer-content" id="gameFooter"></div>
+        </div>
+    </div>
+
+    <!-- TELA DE VITÓRIA -->
+    <div id="victory" class="screen gradient-bg">
+        <div class="victory-area">
+            <button class="home-btn" onclick="goHome()">🏠</button>
+            
+            <div class="victory-card">
+                <div class="victory-emoji" id="victoryEmoji">🎉</div>
+                <h2 style="font-size: 2.5rem; font-weight: bold; color: var(--cor-primaria); margin-bottom: 1rem;" id="victoryTitle">Parabéns!</h2>
+                <p style="font-size: 1.5rem; color: #666; margin-bottom: 1.5rem;" id="victoryMessage"></p>
+                
+                <div class="stats-container">
+                    <div class="stat-box" id="finalTime">Tempo: 00:00</div>
+                    <div class="stat-box" id="finalMoves">Jogadas: 0</div>
+                </div>
+                
+                <button class="btn btn-primary" onclick="restartGame()" style="margin-top: 1rem;">🔄 Jogar Novamente</button>
+                <button class="btn" onclick="goHome()" style="background: #6b7280; margin-top: 0.5rem;">Mudar Dificuldade</button>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <div class="footer-content" id="victoryFooter"></div>
+        </div>
+    </div>
+
+    <script>
+        // ========== CONFIGURAÇÕES - EDITE AQUI! ==========
+        const CONFIG = {
+            // DADOS DA EMPRESA
+            empresa: "Ganhe um lindo brinde",
+            
+            // LOGO DA EMPRESA (escolha uma opção):
+            // Opção 1: Use emoji (deixe usarImagemLogo como false)
+            logoEmoji: "🎯",
+            
+            // Opção 2: Use imagem (mude usarImagemLogo para true e coloque o caminho)
+            usarImagemLogo: true,  // ← MUDE PARA true PARA USAR IMAGEM
+            logoImagem: "logo.png",  // ← COLOQUE O NOME DO ARQUIVO AQUI
+            // Exemplos: "logo.png", "./imagens/logo.jpg", "https://site.com/logo.png"
+            
+            // VÍDEO DO SCREENSAVER
+            videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+            // Para usar vídeo local: "propaganda.mp4" ou "./videos/propaganda.mp4"
+            
+            // IMAGEM DO RODAPÉ (deixe vazio "" para mostrar logo)
+            imagemRodape: "", // Exemplo: "rodape.jpg" ou deixe vazio
+            
+            // TEMPOS
+            tempoInatividade: 60, // segundos até ativar screensaver
+            tempoLimite: 0, // segundos do jogo (0 = sem limite)
+            
+            // ========== CARTAS DO JOGO ==========
+            // Para cada carta, escolha:
+            // - tipo: "emoji" ou "imagem"
+            // - conteudo: emoji (ex: "🚀") ou caminho da imagem (ex: "carta1.png")
+            
+            cartasFacil: [
+                { id: 1, tipo: "emoji", conteudo: "🚀" },
+                { id: 2, tipo: "emoji", conteudo: "⭐" },
+                { id: 3, tipo: "emoji", conteudo: "🎨" },
+                { id: 4, tipo: "emoji", conteudo: "🎯" }
+                
+                // EXEMPLOS PARA USAR IMAGENS:
+                // { id: 1, tipo: "imagem", conteudo: "carta1.png" },
+                // { id: 2, tipo: "imagem", conteudo: "./imagens/carta2.jpg" },
+                // { id: 3, tipo: "imagem", conteudo: "https://site.com/carta3.png" },
+            ],
+            
+            cartasIntermediario: [
+                { id: 1, tipo: "emoji", conteudo: "🚀" },
+                { id: 2, tipo: "emoji", conteudo: "⭐" },
+                { id: 3, tipo: "emoji", conteudo: "🎨" },
+                { id: 4, tipo: "emoji", conteudo: "🎯" },
+                { id: 5, tipo: "emoji", conteudo: "🏆" },
+                { id: 6, tipo: "emoji", conteudo: "💡" },
+                { id: 7, tipo: "emoji", conteudo: "🎪" },
+                { id: 8, tipo: "emoji", conteudo: "🎭" }
+            ],
+            
+            cartasDificil: [
+                { id: 1, tipo: "emoji", conteudo: "🚀" },
+                { id: 2, tipo: "emoji", conteudo: "⭐" },
+                { id: 3, tipo: "emoji", conteudo: "🎨" },
+                { id: 4, tipo: "emoji", conteudo: "🎯" },
+                { id: 5, tipo: "emoji", conteudo: "🏆" },
+                { id: 6, tipo: "emoji", conteudo: "💡" },
+                { id: 7, tipo: "emoji", conteudo: "🎪" },
+                { id: 8, tipo: "emoji", conteudo: "🎭" },
+                { id: 9, tipo: "emoji", conteudo: "🎸" },
+                { id: 10, tipo: "emoji", conteudo: "🎮" },
+                { id: 11, tipo: "emoji", conteudo: "🎲" },
+                { id: 12, tipo: "emoji", conteudo: "🎰" }
+            ]
+        };
+
+        // ========== VARIÁVEIS GLOBAIS ==========
+        let currentDifficulty = null;
+        let cards = [];
+        let flippedCards = [];
+        let matchedCards = [];
+        let moves = 0;
+        let seconds = 0;
+        let gameTimer = null;
+        let inactivityTimer = null;
+        let inactivitySeconds = 0;
+
+        // ========== FUNÇÕES DE RENDERIZAÇÃO DE LOGO ==========
+        function renderLogo(containerId, size = 'large') {
+            const container = document.getElementById(containerId);
+            
+            if (CONFIG.usarImagemLogo) {
+                // Usa imagem
+                const img = document.createElement('img');
+                img.src = CONFIG.logoImagem;
+                img.alt = CONFIG.empresa;
+                img.className = size === 'large' ? 'logo-img' : 'logo-footer';
+                img.onerror = function() {
+                    // Se a imagem não carregar, mostra o emoji
+                    container.innerHTML = `<div class="logo">${CONFIG.logoEmoji}</div>`;
+                };
+                container.innerHTML = '';
+                container.appendChild(img);
+            } else {
+                // Usa emoji
+                container.innerHTML = `<div class="logo">${CONFIG.logoEmoji}</div>`;
+            }
+        }
+
+        function renderFooter(containerId) {
+            const container = document.getElementById(containerId);
+            
+            if (CONFIG.imagemRodape) {
+                // Usa imagem customizada do rodapé
+                container.innerHTML = `<img src="${CONFIG.imagemRodape}" alt="Rodapé" style="width: 100%; height: 100%; object-fit: contain;">`;
+            } else if (CONFIG.usarImagemLogo) {
+                // Usa a logo da empresa
+                const img = document.createElement('img');
+                img.src = CONFIG.logoImagem;
+                img.alt = CONFIG.empresa;
+                img.className = 'logo-footer';
+                img.onerror = function() {
+                    container.innerHTML = `
+                        <div style="font-size: 5rem; margin-bottom: 0.5rem;">${CONFIG.logoEmoji}</div>
+                        <h2 style="font-size: 2.5rem; font-weight: bold; color: var(--cor-primaria);">${CONFIG.empresa}</h2>
+                    `;
+                };
+                container.innerHTML = '';
+                container.appendChild(img);
+                
+                const title = document.createElement('h2');
+                title.style.fontSize = '2.5rem';
+                title.style.fontWeight = 'bold';
+                title.style.color = 'var(--cor-primaria)';
+                title.style.marginTop = '0.5rem';
+                title.textContent = CONFIG.empresa;
+                container.appendChild(title);
+            } else {
+                // Usa emoji
+                container.innerHTML = `
+                    <div style="font-size: 5rem; margin-bottom: 0.5rem;">${CONFIG.logoEmoji}</div>
+                    <h2 style="font-size: 2.5rem; font-weight: bold; color: var(--cor-primaria);">${CONFIG.empresa}</h2>
+                `;
+            }
+        }
+
+        function renderHeaderLogo() {
+            const container = document.getElementById('headerLogo');
+            
+            if (CONFIG.usarImagemLogo) {
+                const img = document.createElement('img');
+                img.src = CONFIG.logoImagem;
+                img.alt = CONFIG.empresa;
+                img.style.height = '2rem';
+                img.style.width = 'auto';
+                img.style.objectFit = 'contain';
+                img.onerror = function() {
+                    container.innerHTML = `<span style="font-size: 2rem;">${CONFIG.logoEmoji}</span>`;
+                };
+                container.innerHTML = '';
+                container.appendChild(img);
+            } else {
+                container.innerHTML = `<span style="font-size: 2rem;">${CONFIG.logoEmoji}</span>`;
+            }
+        }
+
+        // ========== FUNÇÕES DE NAVEGAÇÃO ==========
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            
+            if (screenId === 'screensaver') {
+                document.getElementById('video').play();
+            }
+        }
+
+        function goHome(event) {
+            if (event) event.stopPropagation();
+            showScreen('menu');
+            resetGame();
+            startInactivityTimer();
+        }
+
+        function exitScreensaver() {
+            showScreen('menu');
+            startInactivityTimer();
+        }
+
+        // ========== TIMER DE INATIVIDADE ==========
+        function startInactivityTimer() {
+            clearInterval(inactivityTimer);
+            inactivitySeconds = 0;
+            
+            inactivityTimer = setInterval(() => {
+                inactivitySeconds++;
+                const remaining = CONFIG.tempoInatividade - inactivitySeconds;
+                
+                if (remaining <= 0) {
+                    showScreen('screensaver');
+                    clearInterval(inactivityTimer);
+                } else {
+                    const mins = Math.floor(remaining / 60);
+                    const secs = remaining % 60;
+                    document.getElementById('inactivityTimer').textContent = 
+                        `Screensaver em: ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                }
+            }, 1000);
+        }
+
+        // ========== INICIAR JOGO ==========
+        function startGame(difficulty) {
+            currentDifficulty = difficulty;
+            clearInterval(inactivityTimer);
+            
+            let baseCards;
+            let gridConfig;
+            
+            switch(difficulty) {
+                case 'facil':
+                    baseCards = CONFIG.cartasFacil;
+                    gridConfig = { cols: 4, rows: 2 };
+                    break;
+                case 'intermediario':
+                    baseCards = CONFIG.cartasIntermediario;
+                    gridConfig = { cols: 4, rows: 4 };
+                    break;
+                case 'dificil':
+                    baseCards = CONFIG.cartasDificil;
+                    gridConfig = { cols: 4, rows: 6 };
+                    break;
+            }
+            
+            cards = [...baseCards, ...baseCards]
+                .map((card, index) => ({ ...card, uniqueId: index }))
+                .sort(() => Math.random() - 0.5);
+            
+            flippedCards = [];
+            matchedCards = [];
+            moves = 0;
+            seconds = 0;
+            
+            const grid = document.getElementById('cardsGrid');
+            grid.style.gridTemplateColumns = `repeat(${gridConfig.cols}, 1fr)`;
+            grid.style.gridTemplateRows = `repeat(${gridConfig.rows}, 1fr)`;
+            grid.innerHTML = '';
+            
+            cards.forEach((card, index) => {
+                const cardEl = document.createElement('div');
+                cardEl.className = 'card';
+                cardEl.dataset.index = index;
+                
+                // Renderizar conteúdo da carta (emoji ou imagem)
+                let cardContent;
+                if (card.tipo === 'imagem') {
+                    cardContent = `<img src="${card.conteudo}" alt="Carta ${card.id}" onerror="this.style.display='none'; this.parentElement.innerHTML='❌';">`;
+                } else {
+                    cardContent = card.conteudo;
+                }
+                
+                cardEl.innerHTML = `
+                    <div class="card-inner">
+                        <div class="card-face card-back">
+                            <div style="font-size: 2rem; color: white; opacity: 0.3;">❓</div>
+                        </div>
+                        <div class="card-face card-front">
+                            <div class="card-content">${cardContent}</div>
+                        </div>
+                    </div>
+                `;
+                cardEl.onclick = () => flipCard(index);
+                grid.appendChild(cardEl);
+            });
+            
+            showScreen('game');
+            startGameTimer();
+        }
+
+        // ========== TIMER DO JOGO ==========
+        function startGameTimer() {
+            clearInterval(gameTimer);
+            gameTimer = setInterval(() => {
+                seconds++;
+                updateTimeDisplay();
+                
+                if (CONFIG.tempoLimite > 0 && seconds >= CONFIG.tempoLimite) {
+                    endGame(false);
+                }
+            }, 1000);
+        }
+
+        function updateTimeDisplay() {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            document.getElementById('timeDisplay').textContent = 
+                `⏱️ ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // ========== VIRAR CARTA ==========
+        function flipCard(index) {
+            if (flippedCards.length === 2) return;
+            if (flippedCards.includes(index)) return;
+            if (matchedCards.includes(index)) return;
+            
+            const cardEl = document.querySelector(`[data-index="${index}"]`);
+            cardEl.classList.add('flipped');
+            flippedCards.push(index);
+            
+            if (flippedCards.length === 2) {
+                moves++;
+                document.getElementById('movesDisplay').textContent = `🎯 ${moves}`;
+                
+                const [first, second] = flippedCards;
+                
+                if (cards[first].id === cards[second].id) {
+                    matchedCards.push(first, second);
+                    document.querySelector(`[data-index="${first}"] .card-front`).classList.add('matched');
+                    document.querySelector(`[data-index="${second}"] .card-front`).classList.add('matched');
+                    flippedCards = [];
+                    
+                    if (matchedCards.length === cards.length) {
+                        setTimeout(() => endGame(true), 500);
+                    }
+                } else {
+                    setTimeout(() => {
+                        document.querySelector(`[data-index="${first}"]`).classList.remove('flipped');
+                        document.querySelector(`[data-index="${second}"]`).classList.remove('flipped');
+                        flippedCards = [];
+                    }, 1000);
+                }
+            }
+        }
+
+        // ========== FIM DO JOGO ==========
+        function endGame(won) {
+            clearInterval(gameTimer);
+            
+            document.getElementById('victoryEmoji').textContent = won ? '🎉' : '⏰';
+            document.getElementById('victoryTitle').textContent = won ? 'Parabéns!' : 'Tempo Esgotado!';
+            document.getElementById('victoryMessage').textContent = 
+                won ? `Você completou o jogo em ${moves} jogadas!` : 'Tente novamente!';
+            
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            document.getElementById('finalTime').textContent = 
+                `Tempo: ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            document.getElementById('finalMoves').textContent = `Jogadas: ${moves}`;
+            
+            showScreen('victory');
+        }
+
+        function restartGame() {
+            if (currentDifficulty) {
+                startGame(currentDifficulty);
+            }
+        }
+
+        function resetGame() {
+            clearInterval(gameTimer);
+            clearInterval(inactivityTimer);
+            currentDifficulty = null;
+            cards = [];
+            flippedCards = [];
+            matchedCards = [];
+            moves = 0;
+            seconds = 0;
+        }
+
+        // ========== INICIALIZAR ==========
+        window.onload = () => {
+            // Renderizar logos e nome da empresa
+            renderLogo('menuLogo', 'large');
+            document.getElementById('menuEmpresaNome').textContent = CONFIG.empresa;
+            
+            renderHeaderLogo();
+            document.getElementById('headerEmpresaNome').textContent = CONFIG.empresa;
+            
+            renderFooter('gameFooter');
+            renderFooter('victoryFooter');
+            
+            // Iniciar timer de inatividade
+            startInactivityTimer();
+        };
+    </script>
+</body>
+</html>
